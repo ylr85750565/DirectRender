@@ -1,0 +1,44 @@
+关于directx 9.0render的学习和研究暂告一段落，Microsoft家的东西，总感觉条条框框束缚太多。
+
+但在windows os下，显示模块多调用directx库，所以还是避不开。以后有机会研究下openGL，开源的毕竟能从源追溯。
+
+总结下此次遇到的问题和解决方法：
+
+问题：屏幕共享画面传到对端后字体模糊不清，字体笔画不连续；
+
+解决方法：依次排除采集、传输、解码等模块后，将问题定位在directx render。
+
+原先采用的render方式是drawPrimitive，流程为：
+1、D3D初始化，创建vertex buffer；
+2、创建texture；
+3、render
+  3.1 I420拷贝到texture；
+  3.2 setStreamSource,绑定顶点缓冲到设备；
+  3.3 setTexture，设置设备纹理；
+  3.4 DrawPrimitive，设置顶点输出方式；
+该方法是典型的3D显示方式，在vertex buffer中可以对顶点进行transform、lightning等。本例用的就是transform，在vertex buffer中定义
+了四个顶点坐标，，tu、tv分别代表纹理坐标，最终显示时顶点坐标将根据纹理坐标进行变换和计算。
+  struct CUSTOMVERTEX
+  {
+      FLOAT x, y, z;
+      DWORD color; // The vertex color
+      FLOAT u, v;
+  };
+  
+  #define D3DFVF_CUSTOMVERTEX (D3DFVF_XYZ|D3DFVF_DIFFUSE|D3DFVF_TEX1)
+
+  CUSTOMVERTEX Vertices[] = {
+            //front
+            { -1.0f, -1.0f, 0.0f, 0xffffffff, 0, 1 }, { -1.0f, 1.0f, 0.0f,
+                    0xffffffff, 0, 0 },
+            { 1.0f, -1.0f, 0.0f, 0xffffffff, 1, 1 }, { 1.0f, 1.0f, 0.0f,
+                    0xffffffff, 1, 0 } };
+
+因为不知道的原因，将窗口大小调整为与texture等大后，字体笔画显示仍旧有粗有细。查阅资料后改为surface方式，surface类似direct draw的
+flip方式，在后台将数据准备好，然后swap到前台，是标准的2D image渲染方法，用这种方式是无论如何也不能进行3D渲染的。流程为：
+1、D3D初始化；
+2、创建offScreenSurface；
+3、render
+3.1 I420拷贝到surface；
+  3.2 GetBackBuffer；
+  3.3 StretchRect；
